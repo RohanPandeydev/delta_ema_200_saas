@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15
+    container_name: trading_bot_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: trading_bot_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - trading_bot_network
+    restart: unless-stopped
+
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    container_name: trading_bot_orchestrator
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/trading_bot_db
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DOCKER_NETWORK=trading_bot_network
+      - BOT_IMAGE=trading-bot:latest
+      - REQUIRE_SUBSCRIPTION=False
+    ports:
+      - "5000:5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./orchestrator:/app
+    depends_on:
+      - db
+    networks:
+      - trading_bot_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  trading_bot_network:
+    driver: bridge

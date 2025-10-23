@@ -1,0 +1,54 @@
+{% extends "base.html" %} {% block title %}Logs - {{ container.container_name
+}}{% endblock %} {% block content %}
+<div class="container">
+  <div class="dashboard-header">
+    <h1>📊 Bot Logs</h1>
+    <p>{{ container.container_name }}</p>
+  </div>
+
+  <div class="nav">
+    <a href="{{ url_for('dashboard.index') }}">Dashboard</a>
+    <a
+      href="{{ url_for('dashboard.logs', container_db_id=container.id) }}"
+      class="active"
+      >Logs</a
+    >
+  </div>
+
+  <div class="card">
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      "
+    >
+      <h2>Real-time Logs</h2>
+      <button
+        class="btn btn-primary btn-sm"
+        onclick="fetchLogs({{ container.id }})"
+      >
+        🔄 Refresh
+      </button>
+    </div>
+
+    <div class="logs-container" id="logs-output">
+      <div class="log-line">Loading logs...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Start log refresh when page loads
+  document.addEventListener('DOMContentLoaded', () => {
+      startLogRefresh({{ container.id }});
+      subscribeLogs({{ container.id }});
+  });
+
+  // Stop refresh when leaving page
+  window.addEventListener('beforeunload', () => {
+      stopLogRefresh();
+  });
+</script>
+{% endblock %}
