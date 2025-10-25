@@ -1,0 +1,241 @@
+{% extends "base.html" %} {% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-9">
+      <div class="card">
+        <div class="card-header bg-info text-white">
+          <h4 class="mb-0">📊 Configure RSI + SMA Trading Bot</h4>
+        </div>
+        <div class="card-body">
+          <form method="POST">
+            <!-- Basic Bot Info -->
+            <div class="mb-3">
+              <label for="bot_name" class="form-label">Bot Name *</label>
+              <input
+                type="text"
+                class="form-control"
+                id="bot_name"
+                name="bot_name"
+                value="My RSI SMA Bot"
+                required
+              />
+              <div class="form-text">Give your bot a unique name</div>
+            </div>
+
+            <!-- Delta Exchange Credentials -->
+            <h5 class="border-bottom pb-2">Delta Exchange Settings</h5>
+            <div class="mb-3">
+              <label for="delta_api_key" class="form-label"
+                >Delta API Key *</label
+              >
+              <input
+                type="text"
+                class="form-control"
+                id="delta_api_key"
+                name="delta_api_key"
+                placeholder="Your Delta API Key"
+                required
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="delta_api_secret" class="form-label"
+                >Delta API Secret *</label
+              >
+              <input
+                type="password"
+                class="form-control"
+                id="delta_api_secret"
+                name="delta_api_secret"
+                placeholder="Your Delta API Secret"
+                required
+              />
+            </div>
+
+            <!-- Trading Configuration -->
+            <h5 class="border-bottom pb-2">Trading Configuration</h5>
+            <div class="row">
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label for="symbol" class="form-label"
+                    >Trading Symbol *</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="symbol"
+                    name="symbol"
+                    value="BTCUSD"
+                    required
+                  />
+                  <div class="form-text">e.g., BTCUSD, ETHUSD</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label for="timeframe" class="form-label"
+                    >Timeframe (minutes) *</label
+                  >
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="timeframe"
+                    name="timeframe"
+                    value="15"
+                    required
+                  />
+                  <div class="form-text">Candle timeframe in minutes</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label for="lot_size" class="form-label">Lot Size *</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="lot_size"
+                    name="lot_size"
+                    value="3"
+                    required
+                  />
+                  <div class="form-text">Trading lot size</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- RSI Configuration -->
+            <h5 class="border-bottom pb-2">RSI Settings</h5>
+            <div class="row">
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label for="rsi_period" class="form-label"
+                    >RSI Period *</label
+                  >
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="rsi_period"
+                    name="rsi_period"
+                    value="14"
+                    required
+                  />
+                  <div class="form-text">RSI calculation period</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label for="rsi_overbought" class="form-label"
+                    >RSI Overbought *</label
+                  >
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="rsi_overbought"
+                    name="rsi_overbought"
+                    value="75"
+                    required
+                  />
+                  <div class="form-text">Overbought threshold (70-80)</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label for="rsi_oversold" class="form-label"
+                    >RSI Oversold *</label
+                  >
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="rsi_oversold"
+                    name="rsi_oversold"
+                    value="30"
+                    required
+                  />
+                  <div class="form-text">Oversold threshold (20-30)</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SMA Configuration -->
+            <h5 class="border-bottom pb-2">SMA Settings</h5>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="sma_period" class="form-label"
+                    >SMA Period *</label
+                  >
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="sma_period"
+                    name="sma_period"
+                    value="21"
+                    required
+                  />
+                  <div class="form-text">Simple Moving Average period</div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="timeframe_candle_m" class="form-label"
+                    >Candle Timeframe (M) *</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="timeframe_candle_m"
+                    name="timeframe_candle_m"
+                    value="0"
+                    required
+                  />
+                  <div class="form-text">Candle timeframe parameter</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Telegram Notifications (Optional) -->
+            <h5 class="border-bottom pb-2">Notifications (Optional)</h5>
+            <div class="mb-3">
+              <label for="telegram_bot_token" class="form-label"
+                >Telegram Bot Token</label
+              >
+              <input
+                type="text"
+                class="form-control"
+                id="telegram_bot_token"
+                name="telegram_bot_token"
+                placeholder="Your Telegram Bot Token"
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="telegram_chat_id" class="form-label"
+                >Telegram Chat ID</label
+              >
+              <input
+                type="text"
+                class="form-control"
+                id="telegram_chat_id"
+                name="telegram_chat_id"
+                placeholder="Your Telegram Chat ID"
+              />
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+              <a
+                href="{{ url_for('dashboard.index') }}"
+                class="btn btn-secondary me-md-2"
+                >Cancel</a
+              >
+              <button type="submit" class="btn btn-info">
+                🚀 Create RSI+SMA Bot
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

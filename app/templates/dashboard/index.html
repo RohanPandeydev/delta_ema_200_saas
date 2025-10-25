@@ -1,0 +1,226 @@
+{% extends "base.html" %} {% block content %}
+<div class="container">
+  <h2>Dashboard</h2>
+
+  <!-- Payment Bypass Notice -->
+  {% if not current_user.is_premium %}
+  <div class="alert alert-warning alert-dismissible fade show">
+    <strong>Premium Required</strong> - Complete payment to create trading bots.
+    <div class="mt-2">
+      <a
+        href="{{ url_for('payment.payment_page') }}"
+        class="btn btn-warning btn-sm"
+        >Activate Premium</a
+      >
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% else %}
+  <div class="alert alert-success alert-dismissible fade show">
+    <strong>🎉 Premium Active!</strong> You can create and manage trading bots.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endif %}
+
+  <!-- Create New Bot Buttons -->
+  {% if current_user.is_premium %}
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5 class="mb-0">Create New Trading Bot</h5>
+    </div>
+    <div class="card-body">
+      <p class="text-muted mb-3">Choose your trading strategy:</p>
+      <a
+        href="{{ url_for('bots.bot_config', bot_type='EMA') }}"
+        class="btn btn-success me-2"
+      >
+        📈 Create EMA Bot
+      </a>
+      <a
+        href="{{ url_for('bots.bot_config', bot_type='RSI_SMA') }}"
+        class="btn btn-info"
+      >
+        📊 Create RSI+SMA Bot
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Bot List - SAFE ITERATION -->
+  <div class="card">
+    <div class="card-header">
+      <h5 class="mb-0">Your Trading Bots</h5>
+    </div>
+    <div class="card-body">
+      {% if bots and bots|length > 0 %}
+      <div class="row">
+        {% for bot in bots %}
+        <div class="col-md-6 mb-3">
+          <div class="card h-100">
+            <div
+              class="card-header d-flex justify-content-between align-items-center"
+            >
+              <h6 class="mb-0">{{ bot.bot_name }}</h6>
+              <span
+                class="badge bg-{{ 'success' if bot.status == 'running' else 'warning' if bot.status == 'stopped' else 'danger' }}"
+              >
+                {{ bot.status|title if bot.status else 'Unknown' }}
+              </span>
+            </div>
+            <div class="card-body">
+              <p class="mb-1"><strong>Type:</strong> {{ bot.bot_type }}</p>
+              <p class="mb-1"><strong>Symbol:</strong> {{ bot.symbol }}</p>
+              <p class="mb-1">
+                <strong>Timeframe:</strong> {{ bot.timeframe }}m
+              </p>
+              {% if bot.container_name %}
+              <p class="mb-2">
+                <strong>Container:</strong>
+                <code>{{ bot.container_name }}</code>
+              </p>
+              {% endif %}
+
+              <!-- Bot Controls -->
+              <div class="btn-group btn-group-sm">
+                <button
+                  class="btn btn-outline-primary view-logs"
+                  data-bot-id="{{ bot.id }}"
+                >
+                  📋 Logs
+                </button>
+                {% if bot.status == 'running' %}
+                <a
+                  href="{{ url_for('bots.stop_bot', bot_id=bot.id) }}"
+                  class="btn btn-warning"
+                  onclick="return confirm('Stop {{ bot.bot_name }}?')"
+                >
+                  ⏸️ Stop
+                </a>
+                {% endif %}
+                <a
+                  href="{{ url_for('bots.delete_bot', bot_id=bot.id) }}"
+                  class="btn btn-danger"
+                  onclick="return confirm('Delete {{ bot.bot_name }}? This will remove the Docker container permanently.')"
+                >
+                  🗑️ Delete
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center py-4">
+        <div class="text-muted mb-3">
+          <h5>No trading bots yet</h5>
+          <p>Create your first trading bot to get started!</p>
+        </div>
+        {% if current_user.is_premium %}
+        <a
+          href="{{ url_for('bots.bot_config', bot_type='EMA') }}"
+          class="btn btn-primary"
+        >
+          Create Your First Bot
+        </a>
+        {% else %}
+        <a href="{{ url_for('payment.payment_page') }}" class="btn btn-primary">
+          Activate Premium to Create Bots
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Logs Modal -->
+<div class="modal fade" id="logsModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title">
+          📊 Live Bot Logs - <span id="botName">Loading...</span>
+          <span class="badge bg-success ms-2" id="connectionStatus"
+            >● LIVE</span
+          >
+        </h5>
+        <div>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-light me-2"
+            id="clearLogs"
+          >
+            🧹 Clear
+          </button>
+          <button
+            type="button"
+            class="btn-close btn-close-white"
+            data-bs-dismiss="modal"
+          ></button>
+        </div>
+      </div>
+      <div class="modal-body p-0">
+        <pre
+          id="logsContent"
+          style="
+            height: 70vh;
+            margin: 0;
+            padding: 15px;
+            background: #1e1e1e;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-y: auto;
+          "
+        ></pre>
+      </div>
+      <div class="modal-footer bg-dark text-white">
+        <small class="text-muted" id="logStats"
+          >Connected to live stream • Logs update every 2 seconds</small
+        >
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const viewLogsButtons = document.querySelectorAll(".view-logs");
+    const logsContent = document.getElementById("logsContent");
+    const botNameElement = document.getElementById("botName");
+    const modal = new bootstrap.Modal(document.getElementById("logsModal"));
+
+    // Handle log button clicks
+    viewLogsButtons.forEach((button) => {
+      button.addEventListener("click", function () {
+        const botId = this.dataset.botId;
+        const botName = this.closest(".card").querySelector("h6").textContent;
+
+        // Show loading and bot name
+        logsContent.innerHTML =
+          '<div class="log-line">Connecting to live logs...</div>';
+        botNameElement.textContent = botName;
+
+        // Start log stream
+        startLogStream(botId);
+
+        // Show modal
+        modal.show();
+      });
+    });
+
+    // Handle modal close
+    document
+      .getElementById("logsModal")
+      .addEventListener("hide.bs.modal", function () {
+        stopLogStream(botId);
+      });
+
+    // Handle clear logs button
+    document.getElementById("clearLogs").addEventListener("click", function () {
+      logsContent.innerHTML = '<div class="log-line">Logs cleared...</div>';
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends "base.html" %} {% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header bg-success text-white">
+          <h4 class="mb-0">📈 Configure EMA Trading Bot</h4>
+        </div>
+        <div class="card-body">
+          <form method="POST">
+            <!-- Basic Bot Info -->
+            <div class="mb-3">
+              <label for="bot_name" class="form-label">Bot Name *</label>
+              <input
+                type="text"
+                class="form-control"
+                id="bot_name"
+                name="bot_name"
+                value="My EMA Bot"
+                required
+              />
+              <div class="form-text">Give your bot a unique name</div>
+            </div>
+
+            <!-- Delta Exchange Credentials -->
+            <h5 class="border-bottom pb-2">Delta Exchange Settings</h5>
+            <div class="mb-3">
+              <label for="delta_api_key" class="form-label"
+                >Delta API Key *</label
+              >
+              <input
+                type="text"
+                class="form-control"
+                id="delta_api_key"
+                name="delta_api_key"
+                placeholder="Your Delta API Key"
+                required
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="delta_api_secret" class="form-label"
+                >Delta API Secret *</label
+              >
+              <input
+                type="password"
+                class="form-control"
+                id="delta_api_secret"
+                name="delta_api_secret"
+                placeholder="Your Delta API Secret"
+                required
+              />
+            </div>
+
+            <!-- Trading Configuration -->
+            <h5 class="border-bottom pb-2">Trading Configuration</h5>
+            <div class="row">
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label for="symbol" class="form-label"
+                    >Trading Symbol *</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="symbol"
+                    name="symbol"
+                    value="BTCUSD"
+                    required
+                  />
+                  <div class="form-text">e.g., BTCUSD, ETHUSD</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label for="timeframe" class="form-label"
+                    >Timeframe (minutes) *</label
+                  >
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="timeframe"
+                    name="timeframe"
+                    value="15"
+                    required
+                  />
+                  <div class="form-text">Candle timeframe in minutes</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label for="lot_size" class="form-label">Lot Size *</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="lot_size"
+                    name="lot_size"
+                    value="0.001"
+                    required
+                  />
+                  <div class="form-text">Trading lot size (e.g., 0.001)</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- EMA Specific Settings -->
+            <h5 class="border-bottom pb-2">EMA Strategy Settings</h5>
+            <div class="mb-3">
+              <label for="ema_period" class="form-label">EMA Period *</label>
+              <input
+                type="number"
+                class="form-control"
+                id="ema_period"
+                name="ema_period"
+                value="200"
+                required
+              />
+              <div class="form-text">
+                Exponential Moving Average period (e.g., 200, 50, 21)
+              </div>
+            </div>
+
+            <!-- Telegram Notifications (Optional) -->
+            <h5 class="border-bottom pb-2">Notifications (Optional)</h5>
+            <div class="mb-3">
+              <label for="telegram_bot_token" class="form-label"
+                >Telegram Bot Token</label
+              >
+              <input
+                type="text"
+                class="form-control"
+                id="telegram_bot_token"
+                name="telegram_bot_token"
+                placeholder="Your Telegram Bot Token"
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="telegram_chat_id" class="form-label"
+                >Telegram Chat ID</label
+              >
+              <input
+                type="text"
+                class="form-control"
+                id="telegram_chat_id"
+                name="telegram_chat_id"
+                placeholder="Your Telegram Chat ID"
+              />
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+              <a
+                href="{{ url_for('dashboard.index') }}"
+                class="btn btn-secondary me-md-2"
+                >Cancel</a
+              >
+              <button type="submit" class="btn btn-success">
+                🚀 Create EMA Bot
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,99 @@
+{% extends "base.html" %} {% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0">Activate Premium Features</h4>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <h5>Premium Features:</h5>
+            <ul class="list-group mb-4">
+              <li class="list-group-item">✅ Create EMA Trading Bot</li>
+              <li class="list-group-item">✅ Create RSI+SMA Trading Bot</li>
+              <li class="list-group-item">✅ Real-time Bot Monitoring</li>
+              <li class="list-group-item">✅ Docker Container Management</li>
+              <li class="list-group-item">✅ Live Trading Logs</li>
+              <li class="list-group-item">✅ Multiple Bot Instances</li>
+            </ul>
+          </div>
+          <div class="col-md-6">
+            <div class="card bg-light">
+              <div class="card-body text-center">
+                <h3>$49.99</h3>
+                <p class="text-muted">One-time payment</p>
+                <div class="mb-3">
+                  <small class="text-muted"
+                    >Lifetime access to all features</small
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-center mt-4">
+          <h5>Complete Payment to Unlock Features</h5>
+          <p class="text-muted mb-4">Choose your payment method:</p>
+
+          <!-- Payment Bypass Button -->
+          <div class="d-grid gap-2">
+            <a
+              href="{{ url_for('payment.payment_success', bot_type=bot_type) if bot_type else url_for('payment.payment_success') }}"
+              class="btn btn-success btn-lg"
+            >
+              💳 Bypass Payment (Activate Premium)
+            </a>
+          </div>
+
+          <div class="mt-4">
+            <small class="text-muted">
+              In a production environment, this would integrate with Stripe,
+              PayPal, or other payment gateways. Currently using bypass for
+              development.
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Features Details -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h5>What You Get</h5>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-4 text-center mb-3">
+            <div class="feature-icon">🤖</div>
+            <h6>Multiple Bot Types</h6>
+            <small>EMA Crossover and RSI+SMA strategies</small>
+          </div>
+          <div class="col-md-4 text-center mb-3">
+            <div class="feature-icon">📊</div>
+            <h6>Real-time Monitoring</h6>
+            <small>Live logs and performance tracking</small>
+          </div>
+          <div class="col-md-4 text-center mb-3">
+            <div class="feature-icon">🐳</div>
+            <h6>Docker Containers</h6>
+            <small>Isolated, secure bot environments</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .feature-icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+  }
+  .list-group-item {
+    border: none;
+    padding: 10px 15px;
+  }
+</style>
+{% endblock %}
