@@ -52,7 +52,7 @@ def add():
             symbol=symbol,
             lot_size=lot_size,
             timeframe=timeframe,
-            telegram_bot_token_encrypted=telegram_token_encrypted,
+            telegram_token_encrypted=telegram_token_encrypted,
             telegram_chat_id=telegram_chat_id
         )
         

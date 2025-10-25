@@ -5,8 +5,10 @@
 Docker container management service
 """
 import docker
+import threading
+import time
 from datetime import datetime
-from orchestrator.extensions import db
+from orchestrator.extensions import db, socketio
 from orchestrator.models import BotContainer, Credential, User
 from orchestrator.services.encryption import encryption_service
 
@@ -48,7 +50,7 @@ class DockerManager:
             # Decrypt credentials
             api_key = encryption_service.decrypt(credential.api_key_encrypted)
             api_secret = encryption_service.decrypt(credential.api_secret_encrypted)
-            telegram_token = encryption_service.decrypt(credential.telegram_bot_token_encrypted) if credential.telegram_bot_token_encrypted else ""
+            telegram_token = encryption_service.decrypt(credential.telegram_token_encrypted) if credential.telegram_token_encrypted else ""
             
             # Create container name
             container_name = f"bot_user{user_id}_cred{credential_id}_{int(datetime.utcnow().timestamp())}"
@@ -84,6 +86,12 @@ class DockerManager:
                     'managed_by': 'orchestrator'
                 }
             )
+
+            # Start background log streaming for this container
+            try:
+                self.start_log_stream_for_container(container.id)
+            except Exception:
+                pass
             
             # Save to database
             bot_container = BotContainer(
@@ -167,6 +175,42 @@ class DockerManager:
             return stats
         except:
             return None
+
+    def _log_stream_worker(self, container_id):
+        """Background worker that streams container logs and emits via SocketIO."""
+        room = f"logs_{container_id}"
+        try:
+            container = self.client.containers.get(container_id)
+        except Exception as e:
+            # Container might have been removed
+            return
+
+        try:
+            # Stream logs (follow=True) and emit lines to the room
+            for raw in container.logs(stream=True, follow=True, tail=10):
+                try:
+                    if not raw:
+                        continue
+                    # raw may be bytes
+                    line = raw.decode('utf-8', errors='replace').rstrip('\n')
+                    socketio.emit('log_update', {'container_id': container_id, 'log': line}, room=room)
+                except Exception:
+                    # Avoid crashing the thread on single-line errors
+                    continue
+                # small sleep to yield
+                time.sleep(0.01)
+        except Exception:
+            # If streaming fails, just exit the worker
+            return
+
+    def start_log_stream_for_container(self, container_id):
+        """Start a daemon thread to stream logs for a specific container id.
+
+        Safe to call multiple times; starts a new thread per call.
+        """
+        t = threading.Thread(target=self._log_stream_worker, args=(container_id,))
+        t.daemon = True
+        t.start()
 
 # Global instance
 docker_manager = DockerManager()

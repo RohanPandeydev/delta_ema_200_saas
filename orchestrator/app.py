@@ -9,6 +9,7 @@ from orchestrator.config import Config
 from orchestrator.extensions import db, bcrypt, login_manager, socketio, celery
 from orchestrator.models import User
 import os
+from orchestrator.services.docker_manager import docker_manager
 
 def create_app(config_class=Config):
     """Application factory"""
@@ -77,5 +78,15 @@ def create_app(config_class=Config):
     # Create tables
     with app.app_context():
         db.create_all()
+        # Resume log streaming for any containers marked as running
+        try:
+            from orchestrator.models import BotContainer
+            running = BotContainer.query.filter_by(status='running').all()
+            for c in running:
+                if c.container_id:
+                    docker_manager.start_log_stream_for_container(c.container_id)
+        except Exception:
+            # Ignore errors during startup streaming
+            pass
     
     return app
