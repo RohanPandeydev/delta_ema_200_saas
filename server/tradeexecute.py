@@ -16,7 +16,7 @@ import hashlib
 import json
 from datetime import datetime, timedelta
 from collections import deque
-from config_rsi_sma import Config
+from config import Config
 from colorama import init, Fore, Style
 import pytz
 

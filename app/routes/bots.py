@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from app.models.bot import BotConfiguration
 from app.utils.docker_manager import docker_manager  # Using the auto-selected manager
 from app import db, socketio
+import time
 
 bots_bp = Blueprint('bots', __name__)
 
@@ -14,12 +15,14 @@ def get_bot_specific_config(bot_type, form_data):
     elif bot_type == 'RSI_SMA':
         return {
             'rsi_period': int(form_data.get('rsi_period', 14)),
-            'rsi_overbought': int(form_data.get('rsi_overbought', 75)),
+            'rsi_overbought': int(form_data.get('rsi_overbought', 70)),
             'rsi_oversold': int(form_data.get('rsi_oversold', 30)),
             'sma_period': int(form_data.get('sma_period', 21)),
-            'timeframe_candle_m': form_data.get('timeframe_candle_m', '0'),
+            'tv_symbol': form_data.get('tv_symbol', 'BTCUSDT'),
+            'use_tradingview_fallback': bool(form_data.get('use_tradingview_fallback', True)),
         }
     return {}
+
 @bots_bp.route('/bot/config/<bot_type>', methods=['GET', 'POST'])
 @login_required
 def bot_config(bot_type):
@@ -49,13 +52,33 @@ def bot_config(bot_type):
                 'user_id': current_user.id,
                 'bot_type': bot_type,
                 'bot_name': bot_name,
+                # Delta Exchange API Credentials
                 'delta_api_key': request.form.get('delta_api_key'),
                 'delta_api_secret': request.form.get('delta_api_secret'),
+                'delta_region': request.form.get('delta_region', 'india'),
+                
+                # Common Trading Configuration
                 'symbol': request.form.get('symbol', 'BTCUSD'),
-                'timeframe': request.form.get('timeframe', '15'),
+                'lot_size': float(request.form.get('lot_size', 1.0)),
+                'timeframe': int(request.form.get('timeframe', 15)),
+                'timeframe_type': request.form.get('timeframe_type', 'm'),
+                
+                # Exchange Settings
+                'testnet': bool(request.form.get('testnet', False)),
+                
+                # Telegram Notifications
                 'telegram_bot_token': request.form.get('telegram_bot_token', ''),
                 'telegram_chat_id': request.form.get('telegram_chat_id', ''),
-                'lot_size': request.form.get('lot_size', '3.0')
+                
+                # HTTP API Configuration
+                'api_port': int(request.form.get('api_port', 8080)),
+                
+                # Logging Configuration
+                'log_level': request.form.get('log_level', 'INFO'),
+                'log_file': request.form.get('log_file', 'trading_bot.log'),
+                
+                # TAAPI Configuration
+                'taapi_secret_key': request.form.get('taapi_secret_key', ''),
             }
             
             # Add bot-specific configuration
@@ -114,6 +137,25 @@ def stop_bot(bot_id):
     
     return redirect(url_for('dashboard.index'))
 
+@bots_bp.route('/bot/<int:bot_id>/start')
+@login_required
+def start_bot(bot_id):
+    """Start a stopped bot"""
+    bot = BotConfiguration.query.get_or_404(bot_id)
+    if bot.user_id != current_user.id:
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('dashboard.index'))
+    
+    # REAL DOCKER START
+    if docker_manager.start_bot(bot.container_id):
+        bot.status = 'running'
+        db.session.commit()
+        flash('Bot started successfully', 'success')
+    else:
+        flash('Error starting bot', 'error')
+    
+    return redirect(url_for('dashboard.index'))
+
 @bots_bp.route('/bot/<int:bot_id>/delete')
 @login_required
 def delete_bot(bot_id):
@@ -131,6 +173,7 @@ def delete_bot(bot_id):
         flash('Error deleting bot', 'error')
     
     return redirect(url_for('dashboard.index'))
+
 @bots_bp.route('/bot/<int:bot_id>/logs')
 @login_required
 def get_bot_logs(bot_id):
@@ -156,4 +199,35 @@ def get_bot_logs(bot_id):
         return jsonify({
             'success': False,
             'error': f'Error fetching logs: {str(e)}'
+        }), 500
+
+@bots_bp.route('/bot/<int:bot_id>/status')
+@login_required
+def get_bot_status(bot_id):
+    """Get real-time bot status from Docker"""
+    try:
+        bot = BotConfiguration.query.get_or_404(bot_id)
+        
+        # Check if user owns this bot
+        if bot.user_id != current_user.id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        # Get real status from Docker
+        status = docker_manager.get_container_status(bot.container_id)
+        
+        # Update database status if different
+        if status != bot.status:
+            bot.status = status
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'status': status,
+            'bot_name': bot.bot_name
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error fetching status: {str(e)}'
         }), 500

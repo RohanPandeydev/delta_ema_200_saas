@@ -46,48 +46,85 @@
   </div>
   {% endif %}
 
-  <!-- Bot List - SAFE ITERATION -->
+  <!-- Bot List -->
   <div class="card">
-    <div class="card-header">
+    <div class="card-header d-flex justify-content-between align-items-center">
       <h5 class="mb-0">Your Trading Bots</h5>
+      <span class="badge bg-primary">{{ bots|length }} bot(s)</span>
     </div>
     <div class="card-body">
       {% if bots and bots|length > 0 %}
       <div class="row">
         {% for bot in bots %}
         <div class="col-md-6 mb-3">
-          <div class="card h-100">
+          <div
+            class="card h-100 border-{{ 'success' if bot.status == 'running' else 'warning' if bot.status == 'stopped' else 'danger' }}"
+          >
             <div
               class="card-header d-flex justify-content-between align-items-center"
             >
               <h6 class="mb-0">{{ bot.bot_name }}</h6>
-              <span
-                class="badge bg-{{ 'success' if bot.status == 'running' else 'warning' if bot.status == 'stopped' else 'danger' }}"
-              >
-                {{ bot.status|title if bot.status else 'Unknown' }}
-              </span>
+              <div>
+                <span
+                  class="badge bg-{{ 'success' if bot.status == 'running' else 'warning' if bot.status == 'stopped' else 'danger' }} me-1"
+                >
+                  {{ bot.status|title if bot.status else 'Unknown' }}
+                </span>
+                {% if bot.testnet %}
+                <span class="badge bg-secondary">TESTNET</span>
+                {% endif %}
+              </div>
             </div>
             <div class="card-body">
-              <p class="mb-1"><strong>Type:</strong> {{ bot.bot_type }}</p>
-              <p class="mb-1"><strong>Symbol:</strong> {{ bot.symbol }}</p>
-              <p class="mb-1">
-                <strong>Timeframe:</strong> {{ bot.timeframe }}m
-              </p>
-              {% if bot.container_name %}
-              <p class="mb-2">
-                <strong>Container:</strong>
-                <code>{{ bot.container_name }}</code>
-              </p>
-              {% endif %}
+              <div class="row">
+                <div class="col-6">
+                  <p class="mb-1"><strong>Type:</strong> {{ bot.bot_type }}</p>
+                  <p class="mb-1"><strong>Symbol:</strong> {{ bot.symbol }}</p>
+                  <p class="mb-1">
+                    <strong>Timeframe:</strong> {{ bot.timeframe }}{{
+                    bot.timeframe_type }}
+                  </p>
+                </div>
+                <div class="col-6">
+                  <p class="mb-1">
+                    <strong>Lot Size:</strong> {{ bot.lot_size }}
+                  </p>
+                  <p class="mb-1">
+                    <strong>Created:</strong> {{
+                    bot.created_at.strftime('%Y-%m-%d') if bot.created_at else
+                    'N/A' }}
+                  </p>
+                  {% if bot.container_name %}
+                  <p class="mb-1">
+                    <small class="text-muted"
+                      >{{ bot.container_name[:20] }}...</small
+                    >
+                  </p>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Bot Specific Configuration -->
+              <div class="mt-2 p-2 bg-light rounded">
+                <small class="text-muted">
+                  {% if bot.bot_type == 'EMA' %}
+                  <strong>EMA Period:</strong> {{ bot.ema_period }} {% elif
+                  bot.bot_type == 'RSI_SMA' %} <strong>RSI:</strong> {{
+                  bot.rsi_period }}/{{ bot.rsi_overbought }}/{{ bot.rsi_oversold
+                  }} <strong>SMA:</strong> {{ bot.sma_period }} {% endif %}
+                </small>
+              </div>
 
               <!-- Bot Controls -->
-              <div class="btn-group btn-group-sm">
+              <div class="btn-group btn-group-sm w-100 mt-2">
                 <button
                   class="btn btn-outline-primary view-logs"
                   data-bot-id="{{ bot.id }}"
+                  data-bot-name="{{ bot.bot_name }}"
                 >
                   📋 Logs
                 </button>
+
                 {% if bot.status == 'running' %}
                 <a
                   href="{{ url_for('bots.stop_bot', bot_id=bot.id) }}"
@@ -96,7 +133,23 @@
                 >
                   ⏸️ Stop
                 </a>
+                {% elif bot.status == 'stopped' %}
+                <a
+                  href="{{ url_for('bots.start_bot', bot_id=bot.id) }}"
+                  class="btn btn-success"
+                  onclick="return confirm('Start {{ bot.bot_name }}?')"
+                >
+                  ▶️ Start
+                </a>
                 {% endif %}
+
+                <button
+                  class="btn btn-outline-info view-details"
+                  data-bot-id="{{ bot.id }}"
+                >
+                  ℹ️ Details
+                </button>
+
                 <a
                   href="{{ url_for('bots.delete_bot', bot_id=bot.id) }}"
                   class="btn btn-danger"
@@ -183,30 +236,128 @@
     </div>
   </div>
 </div>
+
+<!-- Bot Details Modal -->
+<div class="modal fade" id="detailsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+          🤖 Bot Details - <span id="detailsBotName">Loading...</span>
+        </h5>
+        <button
+          type="button"
+          class="btn-close btn-close-white"
+          data-bs-dismiss="modal"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <div id="botDetailsContent">
+          <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading bot details...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %} {% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
+  let socket = null;
+  let currentBotId = null;
+
   document.addEventListener("DOMContentLoaded", function () {
     const viewLogsButtons = document.querySelectorAll(".view-logs");
+    const viewDetailsButtons = document.querySelectorAll(".view-details");
     const logsContent = document.getElementById("logsContent");
     const botNameElement = document.getElementById("botName");
-    const modal = new bootstrap.Modal(document.getElementById("logsModal"));
+    const detailsBotNameElement = document.getElementById("detailsBotName");
+    const botDetailsContent = document.getElementById("botDetailsContent");
+    const logsModal = new bootstrap.Modal(document.getElementById("logsModal"));
+    const detailsModal = new bootstrap.Modal(
+      document.getElementById("detailsModal")
+    );
+
+    // Initialize Socket.IO connection
+    function initSocket() {
+      socket = io();
+
+      socket.on("connect", function () {
+        console.log("WebSocket connected");
+      });
+
+      socket.on("log_update", function (data) {
+        if (data.bot_id == currentBotId) {
+          const logLine = document.createElement("div");
+          logLine.className = "log-line";
+          logLine.textContent = `[${new Date().toLocaleTimeString()}] ${
+            data.log_line
+          }`;
+          logsContent.appendChild(logLine);
+          logsContent.scrollTop = logsContent.scrollHeight;
+        }
+      });
+
+      socket.on("error", function (data) {
+        const errorLine = document.createElement("div");
+        errorLine.className = "log-line text-danger";
+        errorLine.textContent = `[ERROR] ${data.message}`;
+        logsContent.appendChild(errorLine);
+      });
+    }
 
     // Handle log button clicks
     viewLogsButtons.forEach((button) => {
       button.addEventListener("click", function () {
-        const botId = this.dataset.botId;
-        const botName = this.closest(".card").querySelector("h6").textContent;
+        currentBotId = this.dataset.botId;
+        const botName = this.dataset.botName;
 
         // Show loading and bot name
         logsContent.innerHTML =
           '<div class="log-line">Connecting to live logs...</div>';
         botNameElement.textContent = botName;
 
+        // Initialize socket if not already done
+        if (!socket) {
+          initSocket();
+        }
+
         // Start log stream
-        startLogStream(botId);
+        socket.emit("start_log_stream", { bot_id: currentBotId });
 
         // Show modal
-        modal.show();
+        logsModal.show();
+      });
+    });
+
+    // Handle details button clicks
+    viewDetailsButtons.forEach((button) => {
+      button.addEventListener("click", function () {
+        const botId = this.dataset.botId;
+        const botCard = this.closest(".card");
+        const botName = botCard.querySelector("h6").textContent;
+
+        detailsBotNameElement.textContent = botName;
+
+        // Fetch bot details
+        fetch(`/bot/${botId}/details`)
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              displayBotDetails(data.bot);
+            } else {
+              botDetailsContent.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            }
+          })
+          .catch((error) => {
+            botDetailsContent.innerHTML = `<div class="alert alert-danger">Error loading details: ${error}</div>`;
+          });
+
+        detailsModal.show();
       });
     });
 
@@ -214,13 +365,114 @@
     document
       .getElementById("logsModal")
       .addEventListener("hide.bs.modal", function () {
-        stopLogStream(botId);
+        if (socket && currentBotId) {
+          socket.emit("stop_log_stream", { bot_id: currentBotId });
+        }
       });
 
     // Handle clear logs button
     document.getElementById("clearLogs").addEventListener("click", function () {
       logsContent.innerHTML = '<div class="log-line">Logs cleared...</div>';
     });
+
+    // Function to display bot details
+    function displayBotDetails(bot) {
+      const detailsHtml = `
+        <div class="row">
+          <div class="col-md-6">
+            <h6>Basic Information</h6>
+            <table class="table table-sm">
+              <tr><td><strong>Bot Name:</strong></td><td>${
+                bot.bot_name
+              }</td></tr>
+              <tr><td><strong>Type:</strong></td><td>${bot.bot_type}</td></tr>
+              <tr><td><strong>Status:</strong></td><td><span class="badge bg-${
+                bot.status === "running" ? "success" : "warning"
+              }">${bot.status}</span></td></tr>
+              <tr><td><strong>Created:</strong></td><td>${
+                bot.created_at
+              }</td></tr>
+            </table>
+          </div>
+          <div class="col-md-6">
+            <h6>Trading Configuration</h6>
+            <table class="table table-sm">
+              <tr><td><strong>Symbol:</strong></td><td>${bot.symbol}</td></tr>
+              <tr><td><strong>Timeframe:</strong></td><td>${
+                bot.timeframe
+              }</td></tr>
+              <tr><td><strong>Lot Size:</strong></td><td>${
+                bot.lot_size
+              }</td></tr>
+              <tr><td><strong>Testnet:</strong></td><td>${
+                bot.testnet ? "Yes" : "No"
+              }</td></tr>
+            </table>
+          </div>
+        </div>
+        ${
+          bot.bot_type === "EMA"
+            ? `
+          <div class="row mt-3">
+            <div class="col-12">
+              <h6>EMA Strategy</h6>
+              <table class="table table-sm">
+                <tr><td><strong>EMA Period:</strong></td><td>${
+                  bot.ema_period || "N/A"
+                }</td></tr>
+              </table>
+            </div>
+          </div>
+        `
+            : ""
+        }
+        ${
+          bot.bot_type === "RSI_SMA"
+            ? `
+          <div class="row mt-3">
+            <div class="col-12">
+              <h6>RSI + SMA Strategy</h6>
+              <table class="table table-sm">
+                <tr><td><strong>RSI Period:</strong></td><td>${
+                  bot.rsi_period || "N/A"
+                }</td></tr>
+                <tr><td><strong>RSI Overbought:</strong></td><td>${
+                  bot.rsi_overbought || "N/A"
+                }</td></tr>
+                <tr><td><strong>RSI Oversold:</strong></td><td>${
+                  bot.rsi_oversold || "N/A"
+                }</td></tr>
+                <tr><td><strong>SMA Period:</strong></td><td>${
+                  bot.sma_period || "N/A"
+                }</td></tr>
+                <tr><td><strong>TradingView Symbol:</strong></td><td>${
+                  bot.tv_symbol || "N/A"
+                }</td></tr>
+                <tr><td><strong>TradingView Fallback:</strong></td><td>${
+                  bot.use_tradingview_fallback ? "Enabled" : "Disabled"
+                }</td></tr>
+              </table>
+            </div>
+          </div>
+        `
+            : ""
+        }
+        <div class="row mt-3">
+          <div class="col-12">
+            <h6>Container Information</h6>
+            <table class="table table-sm">
+              <tr><td><strong>Container ID:</strong></td><td><code>${
+                bot.container_id || "N/A"
+              }</code></td></tr>
+              <tr><td><strong>Container Name:</strong></td><td><code>${
+                bot.container_name || "N/A"
+              }</code></td></tr>
+            </table>
+          </div>
+        </div>
+      `;
+      botDetailsContent.innerHTML = detailsHtml;
+    }
   });
 </script>
 {% endblock %}

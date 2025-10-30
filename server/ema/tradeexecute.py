@@ -11,7 +11,7 @@ import hashlib
 import json
 from datetime import datetime
 from collections import deque
-from config_ema import Config
+from config import Config
 from colorama import init, Fore, Style
 from telegram_notifier import TelegramNotifier
 

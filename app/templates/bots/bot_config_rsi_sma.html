@@ -1,7 +1,7 @@
 {% extends "base.html" %} {% block content %}
 <div class="container">
   <div class="row justify-content-center">
-    <div class="col-md-9">
+    <div class="col-md-10">
       <div class="card">
         <div class="card-header bg-info text-white">
           <h4 class="mb-0">📊 Configure RSI + SMA Trading Bot</h4>
@@ -23,37 +23,77 @@
             </div>
 
             <!-- Delta Exchange Credentials -->
-            <h5 class="border-bottom pb-2">Delta Exchange Settings</h5>
-            <div class="mb-3">
-              <label for="delta_api_key" class="form-label"
-                >Delta API Key *</label
-              >
-              <input
-                type="text"
-                class="form-control"
-                id="delta_api_key"
-                name="delta_api_key"
-                placeholder="Your Delta API Key"
-                required
-              />
+            <h5 class="border-bottom pb-2 mt-4">Delta Exchange Settings</h5>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="delta_api_key" class="form-label"
+                    >Delta API Key *</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="delta_api_key"
+                    name="delta_api_key"
+                    placeholder="Your Delta API Key"
+                    required
+                  />
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="delta_api_secret" class="form-label"
+                    >Delta API Secret *</label
+                  >
+                  <input
+                    type="password"
+                    class="form-control"
+                    id="delta_api_secret"
+                    name="delta_api_secret"
+                    placeholder="Your Delta API Secret"
+                    required
+                  />
+                </div>
+              </div>
             </div>
 
-            <div class="mb-3">
-              <label for="delta_api_secret" class="form-label"
-                >Delta API Secret *</label
-              >
-              <input
-                type="password"
-                class="form-control"
-                id="delta_api_secret"
-                name="delta_api_secret"
-                placeholder="Your Delta API Secret"
-                required
-              />
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="delta_region" class="form-label"
+                    >Delta Region *</label
+                  >
+                  <select
+                    class="form-select"
+                    id="delta_region"
+                    name="delta_region"
+                    required
+                  >
+                    <option value="india" selected>India</option>
+                    <option value="global">Global</option>
+                    <option value="us">US</option>
+                  </select>
+                  <div class="form-text">Select your Delta Exchange region</div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3 form-check form-switch mt-4">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="testnet"
+                    name="testnet"
+                  />
+                  <label class="form-check-label" for="testnet">
+                    Testnet Mode
+                  </label>
+                  <div class="form-text">Use testnet for paper trading</div>
+                </div>
+              </div>
             </div>
 
             <!-- Trading Configuration -->
-            <h5 class="border-bottom pb-2">Trading Configuration</h5>
+            <h5 class="border-bottom pb-2 mt-4">Trading Configuration</h5>
             <div class="row">
               <div class="col-md-4">
                 <div class="mb-3">
@@ -73,9 +113,7 @@
               </div>
               <div class="col-md-4">
                 <div class="mb-3">
-                  <label for="timeframe" class="form-label"
-                    >Timeframe (minutes) *</label
-                  >
+                  <label for="timeframe" class="form-label">Timeframe *</label>
                   <input
                     type="number"
                     class="form-control"
@@ -84,27 +122,63 @@
                     value="15"
                     required
                   />
-                  <div class="form-text">Candle timeframe in minutes</div>
+                  <div class="form-text">Candle timeframe</div>
                 </div>
               </div>
               <div class="col-md-4">
                 <div class="mb-3">
+                  <label for="timeframe_type" class="form-label"
+                    >Timeframe Type *</label
+                  >
+                  <select
+                    class="form-select"
+                    id="timeframe_type"
+                    name="timeframe_type"
+                    required
+                  >
+                    <option value="m" selected>Minutes</option>
+                    <option value="h">Hours</option>
+                    <option value="d">Days</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
                   <label for="lot_size" class="form-label">Lot Size *</label>
                   <input
-                    type="text"
+                    type="number"
+                    step="0.001"
                     class="form-control"
                     id="lot_size"
                     name="lot_size"
-                    value="3"
+                    value="1.0"
                     required
                   />
                   <div class="form-text">Trading lot size</div>
                 </div>
               </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="api_port" class="form-label">API Port</label>
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="api_port"
+                    name="api_port"
+                    value="8080"
+                  />
+                  <div class="form-text">
+                    HTTP API port for bot communication
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- RSI Configuration -->
-            <h5 class="border-bottom pb-2">RSI Settings</h5>
+            <h5 class="border-bottom pb-2 mt-4">RSI Settings</h5>
             <div class="row">
               <div class="col-md-4">
                 <div class="mb-3">
@@ -132,7 +206,7 @@
                     class="form-control"
                     id="rsi_overbought"
                     name="rsi_overbought"
-                    value="75"
+                    value="70"
                     required
                   />
                   <div class="form-text">Overbought threshold (70-80)</div>
@@ -157,7 +231,7 @@
             </div>
 
             <!-- SMA Configuration -->
-            <h5 class="border-bottom pb-2">SMA Settings</h5>
+            <h5 class="border-bottom pb-2 mt-4">SMA Settings</h5>
             <div class="row">
               <div class="col-md-6">
                 <div class="mb-3">
@@ -175,54 +249,131 @@
                   <div class="form-text">Simple Moving Average period</div>
                 </div>
               </div>
+            </div>
+
+            <!-- TradingView Fallback Settings -->
+            <h5 class="border-bottom pb-2 mt-4">TradingView Integration</h5>
+            <div class="row">
               <div class="col-md-6">
                 <div class="mb-3">
-                  <label for="timeframe_candle_m" class="form-label"
-                    >Candle Timeframe (M) *</label
+                  <label for="tv_symbol" class="form-label"
+                    >TradingView Symbol</label
                   >
                   <input
                     type="text"
                     class="form-control"
-                    id="timeframe_candle_m"
-                    name="timeframe_candle_m"
-                    value="0"
-                    required
+                    id="tv_symbol"
+                    name="tv_symbol"
+                    value="BTCUSDT"
                   />
-                  <div class="form-text">Candle timeframe parameter</div>
+                  <div class="form-text">
+                    Symbol for TradingView (e.g., BTCUSDT)
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3 form-check form-switch mt-4">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="use_tradingview_fallback"
+                    name="use_tradingview_fallback"
+                    checked
+                  />
+                  <label
+                    class="form-check-label"
+                    for="use_tradingview_fallback"
+                  >
+                    Enable TradingView Fallback
+                  </label>
+                  <div class="form-text">Use TradingView as data fallback</div>
                 </div>
               </div>
             </div>
 
             <!-- Telegram Notifications (Optional) -->
-            <h5 class="border-bottom pb-2">Notifications (Optional)</h5>
-            <div class="mb-3">
-              <label for="telegram_bot_token" class="form-label"
-                >Telegram Bot Token</label
-              >
-              <input
-                type="text"
-                class="form-control"
-                id="telegram_bot_token"
-                name="telegram_bot_token"
-                placeholder="Your Telegram Bot Token"
-              />
+            <h5 class="border-bottom pb-2 mt-4">Notifications (Optional)</h5>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="telegram_bot_token" class="form-label"
+                    >Telegram Bot Token</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="telegram_bot_token"
+                    name="telegram_bot_token"
+                    placeholder="Your Telegram Bot Token"
+                  />
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="telegram_chat_id" class="form-label"
+                    >Telegram Chat ID</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="telegram_chat_id"
+                    name="telegram_chat_id"
+                    placeholder="Your Telegram Chat ID"
+                  />
+                </div>
+              </div>
             </div>
 
+            <!-- Logging Configuration -->
+            <h5 class="border-bottom pb-2 mt-4">Logging Configuration</h5>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="log_level" class="form-label">Log Level</label>
+                  <select class="form-select" id="log_level" name="log_level">
+                    <option value="INFO" selected>INFO</option>
+                    <option value="DEBUG">DEBUG</option>
+                    <option value="WARNING">WARNING</option>
+                    <option value="ERROR">ERROR</option>
+                  </select>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="log_file" class="form-label">Log File</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="log_file"
+                    name="log_file"
+                    value="trading_bot.log"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- TAAPI Configuration (Optional) -->
+            <h5 class="border-bottom pb-2 mt-4">
+              Technical Analysis (Optional)
+            </h5>
             <div class="mb-3">
-              <label for="telegram_chat_id" class="form-label"
-                >Telegram Chat ID</label
+              <label for="taapi_secret_key" class="form-label"
+                >TAAPI Secret Key</label
               >
               <input
-                type="text"
+                type="password"
                 class="form-control"
-                id="telegram_chat_id"
-                name="telegram_chat_id"
-                placeholder="Your Telegram Chat ID"
+                id="taapi_secret_key"
+                name="taapi_secret_key"
+                placeholder="Your TAAPI Secret Key"
               />
+              <div class="form-text">
+                For additional technical analysis features
+              </div>
             </div>
 
             <!-- Submit Buttons -->
-            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
               <a
                 href="{{ url_for('dashboard.index') }}"
                 class="btn btn-secondary me-md-2"

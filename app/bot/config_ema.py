@@ -269,6 +269,41 @@ class Config:
 # Initialize API URL
 Config._set_api_url()
 
+# If some sensitive keys are missing, prompt the user interactively (when running in a TTY)
+try:
+    import sys
+    import getpass
+
+    if sys.stdin.isatty():
+        # Prompt for API key/secret if not set
+        if not Config.DELTA_API_KEY:
+            val = input("Enter DELTA_API_KEY (or press Enter to skip): ").strip()
+            if val:
+                Config.DELTA_API_KEY = val
+                os.environ['DELTA_API_KEY'] = val
+
+        if not Config.DELTA_API_SECRET:
+            val = getpass.getpass("Enter DELTA_API_SECRET (input hidden, or press Enter to skip): ").strip()
+            if val:
+                Config.DELTA_API_SECRET = val
+                os.environ['DELTA_API_SECRET'] = val
+
+        # Optional: Telegram
+        if not Config.TELEGRAM_BOT_TOKEN:
+            val = input("Enter TELEGRAM_BOT_TOKEN (or press Enter to skip): ").strip()
+            if val:
+                Config.TELEGRAM_BOT_TOKEN = val
+                os.environ['TELEGRAM_BOT_TOKEN'] = val
+
+        if not Config.TELEGRAM_CHAT_ID:
+            val = input("Enter TELEGRAM_CHAT_ID (or press Enter to skip): ").strip()
+            if val:
+                Config.TELEGRAM_CHAT_ID = val
+                os.environ['TELEGRAM_CHAT_ID'] = val
+except Exception:
+    # Non-interactive environments or errors should not break import
+    pass
+
 # Validate configuration on import
 if __name__ != "__main__":
     Config.validate()
