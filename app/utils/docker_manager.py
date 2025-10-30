@@ -133,15 +133,22 @@ class RealDockerManager(DockerManagerBase):
                     "TAAPI_SECRET_KEY": bot_config.taapi_secret_key
                 })
 
+            # Determine network mode (host networking is not supported on Windows)
+            network_mode = "host" if platform.system().lower() != 'windows' else None
+
+            run_kwargs = {
+                'image': "trading-bot:latest",
+                'name': container_name,
+                'environment': environment,
+                'detach': True,
+                'restart_policy': {"Name": "unless-stopped"},
+            }
+
+            if network_mode:
+                run_kwargs['network_mode'] = network_mode
+
             # Create container
-            container = self.client.containers.run(
-                "trading-bot:latest",
-                name=container_name,
-                environment=environment,
-                detach=True,
-                restart_policy={"Name": "unless-stopped"},
-                network_mode="host"  # Use host network for better connectivity
-            )
+            container = self.client.containers.run(**run_kwargs)
 
             print(f"✅ Created container: {container.id} ({container_name})")
             return container.id, container_name

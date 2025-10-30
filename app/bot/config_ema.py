@@ -17,16 +17,21 @@ class Config:
     # Delta Exchange API
     DELTA_API_KEY = os.getenv('DELTA_API_KEY')
     DELTA_API_SECRET = os.getenv('DELTA_API_SECRET')
-    EMA_PERIOD = os.getenv('EMA_PERIOD')
+    # Backwards-compatible EMA env names: accept EMA or EMA_PERIOD
+    EMA = int(os.getenv('EMA', os.getenv('EMA_PERIOD', '200')))
+    EMA_PERIOD = EMA
+
     DELTA_REGION = os.getenv('DELTA_REGION', 'india').lower()
     TESTNET = os.getenv('TESTNET', 'False').lower() == 'true'
 
     # Trading Parameters
     SYMBOL = os.getenv('SYMBOL', 'ETHUSD')
-  
+
     LOT_SIZE = float(os.getenv('LOT_SIZE', '1'))
-   
-    TIMEFRAME_1M = int(os.getenv('TIMEFRAME_1M', '1'))
+
+    # Timeframe: support TIMEFRAME (units) and TIMEFRAME_TYPE (m/h/d/w/mm)
+    TIMEFRAME = int(os.getenv('TIMEFRAME', os.getenv('TIMEFRAME_1M', '1')))
+    TIMEFRAME_TYPE = os.getenv('TIMEFRAME_TYPE', 'm')
     
 
     # Telegram
@@ -268,44 +273,45 @@ class Config:
 
 # Initialize API URL
 Config._set_api_url()
+# If running as a script, optionally prompt and validate. When imported by the
+# web app (Flask) we should NOT perform network calls or interactive prompts.
+if __name__ == "__main__":
+    try:
+        import sys
+        import getpass
 
-# If some sensitive keys are missing, prompt the user interactively (when running in a TTY)
-try:
-    import sys
-    import getpass
+        if sys.stdin.isatty():
+            # Prompt for API key/secret if not set
+            if not Config.DELTA_API_KEY:
+                val = input("Enter DELTA_API_KEY (or press Enter to skip): ").strip()
+                if val:
+                    Config.DELTA_API_KEY = val
+                    os.environ['DELTA_API_KEY'] = val
 
-    if sys.stdin.isatty():
-        # Prompt for API key/secret if not set
-        if not Config.DELTA_API_KEY:
-            val = input("Enter DELTA_API_KEY (or press Enter to skip): ").strip()
-            if val:
-                Config.DELTA_API_KEY = val
-                os.environ['DELTA_API_KEY'] = val
+            if not Config.DELTA_API_SECRET:
+                val = getpass.getpass("Enter DELTA_API_SECRET (input hidden, or press Enter to skip): ").strip()
+                if val:
+                    Config.DELTA_API_SECRET = val
+                    os.environ['DELTA_API_SECRET'] = val
 
-        if not Config.DELTA_API_SECRET:
-            val = getpass.getpass("Enter DELTA_API_SECRET (input hidden, or press Enter to skip): ").strip()
-            if val:
-                Config.DELTA_API_SECRET = val
-                os.environ['DELTA_API_SECRET'] = val
+            # Optional: Telegram
+            if not Config.TELEGRAM_BOT_TOKEN:
+                val = input("Enter TELEGRAM_BOT_TOKEN (or press Enter to skip): ").strip()
+                if val:
+                    Config.TELEGRAM_BOT_TOKEN = val
+                    os.environ['TELEGRAM_BOT_TOKEN'] = val
 
-        # Optional: Telegram
-        if not Config.TELEGRAM_BOT_TOKEN:
-            val = input("Enter TELEGRAM_BOT_TOKEN (or press Enter to skip): ").strip()
-            if val:
-                Config.TELEGRAM_BOT_TOKEN = val
-                os.environ['TELEGRAM_BOT_TOKEN'] = val
+            if not Config.TELEGRAM_CHAT_ID:
+                val = input("Enter TELEGRAM_CHAT_ID (or press Enter to skip): ").strip()
+                if val:
+                    Config.TELEGRAM_CHAT_ID = val
+                    os.environ['TELEGRAM_CHAT_ID'] = val
 
-        if not Config.TELEGRAM_CHAT_ID:
-            val = input("Enter TELEGRAM_CHAT_ID (or press Enter to skip): ").strip()
-            if val:
-                Config.TELEGRAM_CHAT_ID = val
-                os.environ['TELEGRAM_CHAT_ID'] = val
-except Exception:
-    # Non-interactive environments or errors should not break import
-    pass
+    except Exception:
+        # Non-interactive environments or errors should not break import
+        pass
 
-# Validate configuration on import
-if __name__ != "__main__":
+    # Perform validation only when executed directly
     Config.validate()
 
 # If run directly, show detailed diagnostics
