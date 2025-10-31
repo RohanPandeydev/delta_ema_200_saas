@@ -3,6 +3,7 @@ EMA-200 Strategy Trading Bot for Delta Exchange - PRODUCTION VERSION
 Fixed: Accurate EMA calculation with proper initialization
 Enhanced: Order monitoring and automatic replacement
 New: Flexible timeframe support (minutes, hours, days, weeks, months)
+Added: Telegram notifications for all trade events
 """
 import requests
 import time
@@ -146,6 +147,8 @@ class EMAStrategyBot:
             Config.TELEGRAM_BOT_TOKEN,
             Config.TELEGRAM_CHAT_ID
         )
+        # Store ema_period in telegram notifier for notifications
+        self.telegram.ema_period = self.ema_period
 
         # Bot State
         self.product_id = None
@@ -164,6 +167,9 @@ class EMAStrategyBot:
         self.trade_count = 0
         self.trade_history = deque(maxlen=50)
         self.current_trade_entry = None
+        self.win_count = 0
+        self.loss_count = 0
+        self.total_pnl = 0.0
 
         # Logging
         self.log_file = f"logs/ema_bot_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
@@ -178,6 +184,15 @@ class EMAStrategyBot:
         self._log(f"✅ Bot initialized successfully!", Fore.GREEN)
         self._log(f"📊 Trading {self.symbol} on {self.timeframe_display} timeframe", Fore.GREEN)
         self._log(f"⏱️  Resolution: {self.resolution} ({self.TIMEFRAME_MINUTES} minutes)", Fore.GREEN)
+        
+        # Send bot start notification
+        self.telegram.notify_bot_start(
+            self.symbol,
+            self.timeframe_display,
+            self.ema_period,
+            self.lot_size
+        )
+        
         print()
 
     def _print_header(self):
@@ -241,6 +256,7 @@ class EMAStrategyBot:
                     self._log(f"❌ {self.symbol} not found!", Fore.RED)
         except Exception as e:
             self._log(f"❌ Error initializing product: {e}", Fore.RED)
+            self.telegram.notify_error(f"Product initialization failed: {e}")
 
     def _calculate_ema(self, prices, period):
         """
@@ -322,6 +338,7 @@ class EMAStrategyBot:
                         self._log(f"⚠️ Insufficient candles: {len(candles)}/{self.ema_period}", Fore.YELLOW)
         except Exception as e:
             self._log(f"❌ Error loading historical data: {e}", Fore.RED)
+            self.telegram.notify_error(f"Historical data loading failed: {e}")
 
     def get_live_price(self):
         """Get current live price from ticker"""
@@ -587,10 +604,15 @@ class EMAStrategyBot:
                     order = data.get('result', {})
                     order_id = order.get('id')
                     self._log(f"✅ Order placed! ID: {order_id}", Fore.GREEN)
+                    
+                    # Send Telegram notification
+                    self.telegram.notify_order_placed(side, size, price, order_id)
+                    
                     return {'success': True, 'order': order, 'order_id': order_id}
                 else:
                     error = data.get('error', 'Unknown error')
                     self._log(f"❌ Order failed: {error}", Fore.RED)
+                    self.telegram.notify_error(f"Order placement failed: {error}")
                     return {'success': False, 'error': error}
             else:
                 self._log(f"❌ HTTP {response.status_code}", Fore.RED)
@@ -598,6 +620,7 @@ class EMAStrategyBot:
 
         except Exception as e:
             self._log(f"❌ Error placing order: {e}", Fore.RED)
+            self.telegram.notify_error(f"Order placement error: {e}")
             return {'success': False, 'error': str(e)}
 
     def monitor_and_replace_order(self, order_id, side, size, max_wait_seconds=15, check_interval=15):
@@ -666,6 +689,13 @@ class EMAStrategyBot:
 
         if action == 'OPEN':
             self.current_trade_entry = trade
+        elif action == 'CLOSE' and pnl is not None:
+            # Update statistics
+            self.total_pnl += pnl
+            if pnl >= 0:
+                self.win_count += 1
+            else:
+                self.loss_count += 1
 
     def close_position(self, current_pos):
         """Close current position with order monitoring"""
@@ -700,6 +730,17 @@ class EMAStrategyBot:
 
                 self.record_trade('CLOSE', side, size, price, current_pos['position'], pnl)
                 self.trade_count += 1
+                
+                # Send Telegram notification
+                self.telegram.notify_position_closed(
+                    current_pos['position'],
+                    size,
+                    current_pos.get('entry_price', 0),
+                    price,
+                    pnl,
+                    self.current_ema
+                )
+                
                 return True
             else:
                 self._log(f"⚠️ Failed to fill close order", Fore.YELLOW)
@@ -735,6 +776,16 @@ class EMAStrategyBot:
                 self.record_trade('OPEN', side, self.lot_size, price, direction)
                 self.trade_count += 1
                 self._log(f"✅ {direction} position opened!", Fore.GREEN)
+                
+                # Send Telegram notification
+                self.telegram.notify_position_opened(
+                    direction,
+                    self.lot_size,
+                    price,
+                    self.current_ema,
+                    orderbook
+                )
+                
                 return True
             else:
                 self._log(f"⚠️ Failed to fill open order", Fore.YELLOW)
@@ -837,6 +888,8 @@ class EMAStrategyBot:
         self._log(f"{'='*80}\n", Fore.CYAN)
 
         loop_counter = 0
+        prev_close = None
+        prev_ema = None
 
         while True:
             try:
@@ -847,11 +900,16 @@ class EMAStrategyBot:
                     self._log(f"🆕 New candle detected!", Fore.CYAN)
                     self._log(f"📊 Candle Close: ${candle['close']:,.2f}", Fore.WHITE)
 
+                    # Store previous values for crossover detection
+                    prev_close = list(self.price_history)[-1] if len(self.price_history) > 0 else None
+                    prev_ema = self.current_ema
+
                     new_ema = self.update_ema_with_new_candle(candle['close'])
 
                     if new_ema:
                         self._log(f"📊 Updated EMA-{self.ema_period}: ${new_ema:,.2f}", Fore.GREEN)
 
+                        # Determine signal
                         if candle['close'] > new_ema:
                             signal = 'LONG'
                             self._log(f"📊 Close ${candle['close']:,.2f} > EMA ${new_ema:,.2f} → LONG", Fore.GREEN)
@@ -859,7 +917,34 @@ class EMAStrategyBot:
                             signal = 'SHORT'
                             self._log(f"📊 Close ${candle['close']:,.2f} < EMA ${new_ema:,.2f} → SHORT", Fore.RED)
 
+                        # Detect crossover for Telegram notification
+                        if prev_close is not None and prev_ema is not None:
+                            was_above = prev_close > prev_ema
+                            is_above = candle['close'] > new_ema
+                            
+                            if was_above != is_above:
+                                # Crossover detected!
+                                crossover_type = "BULLISH" if is_above else "BEARISH"
+                                self._log(f"🔔 {crossover_type} CROSSOVER DETECTED!", Fore.MAGENTA)
+                                
+                                self.telegram.notify_crossover_detected(
+                                    crossover_type,
+                                    candle['close'],
+                                    new_ema,
+                                    prev_close,
+                                    prev_ema
+                                )
+
                         self.execute_signal(signal)
+
+                        # Send periodic trade summary every 10 trades
+                        if self.trade_count > 0 and self.trade_count % 10 == 0:
+                            self.telegram.notify_trade_summary(
+                                self.trade_count,
+                                self.win_count,
+                                self.loss_count,
+                                self.total_pnl
+                            )
 
                 if loop_counter % 3 == 0:
                     self.display_live_status()
@@ -871,9 +956,19 @@ class EMAStrategyBot:
                 self._log(f"\n🛑 Bot stopped by user", Fore.YELLOW)
                 self._log(f"📊 Total trades: {self.trade_count}", Fore.CYAN)
                 self.display_recent_trades(10)
+                
+                # Send shutdown notification
+                self.telegram.notify_bot_shutdown(
+                    self.trade_count,
+                    self.win_count,
+                    self.loss_count,
+                    self.total_pnl
+                )
+                
                 break
             except Exception as e:
                 self._log(f"❌ Error in main loop: {e}", Fore.RED)
+                self.telegram.notify_error(f"Main loop error: {e}")
                 time.sleep(10)
 
 

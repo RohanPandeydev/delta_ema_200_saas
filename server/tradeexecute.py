@@ -1,11 +1,11 @@
 """
-RSI-SMA Trading Bot - TradingView Exact Match
-==============================================
+RSI-SMA Trading Bot - TradingView Exact Match with Telegram Notifications
+===========================================================================
 ✅ Wilder's smoothing (RMA) - exact TradingView method
 ✅ Only completed candles used
 ✅ Proper initialization with historical data
 ✅ Accurate crossover detection
-✅ Improved error handling and connection management
+✅ Real-time Telegram notifications
 """
 import requests
 from requests.adapters import HTTPAdapter
@@ -19,6 +19,7 @@ from collections import deque
 from config import Config
 from colorama import init, Fore, Style
 import pytz
+from telegram_notifier import TelegramNotifier
 
 init(autoreset=True)
 
@@ -140,7 +141,7 @@ class SimpleMovingAverage:
 
 
 class AccurateRSISMABot:
-    """RSI-SMA Trading Bot with TradingView-exact calculations"""
+    """RSI-SMA Trading Bot with TradingView-exact calculations and Telegram notifications"""
     
     def __init__(self):
         self.base_url = Config.get_base_url()
@@ -170,6 +171,12 @@ class AccurateRSISMABot:
         # TIMEZONE
         self.timezone = pytz.timezone('Asia/Kolkata')
         self.utc_tz = pytz.UTC
+        
+        # Initialize Telegram Notifier
+        self.telegram = TelegramNotifier(
+            bot_token=getattr(Config, 'TELEGRAM_BOT_TOKEN', ''),
+            chat_id=getattr(Config, 'TELEGRAM_CHAT_ID', '')
+        )
         
         # Connection management
         self._setup_sessions()
@@ -210,6 +217,10 @@ class AccurateRSISMABot:
         # Crossover detection
         self.pending_signal = None
         
+        # Position tracking for P&L
+        self.last_position_entry = None
+        self.last_position_size = 0
+        
         # Wallet balance
         self.wallet_balance = 0
         self.available_balance = 0
@@ -229,6 +240,17 @@ class AccurateRSISMABot:
         self._fetch_wallet_balance()
         
         self._log(f"✅ Bot initialized - TradingView exact match!", Fore.GREEN)
+        
+        # Send Telegram notification for bot start
+        if self.telegram.enabled:
+            self.telegram.notify_bot_start(
+                symbol=self.symbol,
+                timeframe=self.timeframe_display,
+                rsi_period=self.rsi_period,
+                sma_period=self.sma_period,
+                lot_size=self.lot_size
+            )
+        
         print()
     
     def _setup_sessions(self):
@@ -314,12 +336,13 @@ class AccurateRSISMABot:
     def _print_header(self):
         """Print startup header"""
         print(f"\n{Fore.CYAN}{'='*80}")
-        print(f"{Fore.CYAN}{f'🎯 RSI-SMA BOT - TRADINGVIEW EXACT MATCH':^80}")
+        print(f"{Fore.CYAN}{f'🎯 RSI-SMA BOT - TRADINGVIEW EXACT MATCH + TELEGRAM':^80}")
         print(f"{Fore.CYAN}{'='*80}")
         print(f"{Fore.YELLOW}{f'✅ RSI({self.rsi_period}) - Wilders RMA':^80}")
         print(f"{Fore.YELLOW}{f'✅ SMA({self.sma_period}) of RSI':^80}")
         print(f"{Fore.YELLOW}{f'✅ Completed candles only':^80}")
         print(f"{Fore.GREEN}{'✅ Verified TradingView accuracy':^80}")
+        print(f"{Fore.GREEN}{'📱 Telegram notifications enabled':^80}")
         print(f"{Fore.CYAN}{'='*80}\n")
     
     def _log(self, message, color=Fore.WHITE):
@@ -608,10 +631,6 @@ class AccurateRSISMABot:
         
         # Bullish crossover: RSI crosses above SMA
         if self.prev_rsi <= self.prev_sma and self.current_rsi > self.current_sma:
-            if pos['position'] == 'LONG':
-                self._log(f"✅ Already LONG - ignoring signal", Fore.YELLOW)
-                return
-            
             cross_details = {
                 "Type": "🟢 BULLISH CROSSOVER",
                 "RSI": f"{self.prev_rsi:.2f} → {self.current_rsi:.2f}",
@@ -620,14 +639,28 @@ class AccurateRSISMABot:
                 "Action": "LONG Entry Signal"
             }
             self._log_detailed("🎯 CROSSOVER DETECTED", cross_details, Fore.GREEN)
+            
+            # Send Telegram notification FIRST (always notify about crossover)
+            if self.telegram.enabled:
+                self.telegram.notify_crossover(
+                    signal='LONG',
+                    prev_rsi=self.prev_rsi,
+                    current_rsi=self.current_rsi,
+                    prev_sma=self.prev_sma,
+                    current_sma=self.current_sma,
+                    price=self.current_price or list(self.price_history)[-1]
+                )
+            
+            # THEN check if we should act on it
+            if pos['position'] == 'LONG':
+                self._log(f"✅ Already LONG - signal ignored", Fore.YELLOW)
+                return
+            
+            # Set pending signal for execution
             self.pending_signal = 'LONG'
         
         # Bearish crossover: RSI crosses below SMA
         elif self.prev_rsi >= self.prev_sma and self.current_rsi < self.current_sma:
-            if pos['position'] == 'SHORT':
-                self._log(f"✅ Already SHORT - ignoring signal", Fore.YELLOW)
-                return
-            
             cross_details = {
                 "Type": "🔴 BEARISH CROSSOVER",
                 "RSI": f"{self.prev_rsi:.2f} → {self.current_rsi:.2f}",
@@ -636,6 +669,24 @@ class AccurateRSISMABot:
                 "Action": "SHORT Entry Signal"
             }
             self._log_detailed("🎯 CROSSOVER DETECTED", cross_details, Fore.RED)
+            
+            # Send Telegram notification FIRST (always notify about crossover)
+            if self.telegram.enabled:
+                self.telegram.notify_crossover(
+                    signal='SHORT',
+                    prev_rsi=self.prev_rsi,
+                    current_rsi=self.current_rsi,
+                    prev_sma=self.prev_sma,
+                    current_sma=self.current_sma,
+                    price=self.current_price or list(self.price_history)[-1]
+                )
+            
+            # THEN check if we should act on it
+            if pos['position'] == 'SHORT':
+                self._log(f"✅ Already SHORT - signal ignored", Fore.YELLOW)
+                return
+            
+            # Set pending signal for execution
             self.pending_signal = 'SHORT'
     
     def get_live_price(self):
@@ -740,7 +791,8 @@ class AccurateRSISMABot:
             if response.status_code == 200:
                 data = response.json()
                 if data.get('success'):
-                    return {'success': True, 'order': data.get('result', {})}
+                    order = data.get('result', {})
+                    return {'success': True, 'order': order}
             
             return {'success': False}
         
@@ -772,11 +824,41 @@ class AccurateRSISMABot:
             close_result = self.place_limit_order(close_side, pos['size'], close_price)
             
             if close_result and close_result['success']:
-                self._log(f"✅ Position closed", Fore.GREEN)
+                # Calculate P&L
+                pnl = 0
+                if self.last_position_entry:
+                    if pos['position'] == 'LONG':
+                        pnl = (close_price - self.last_position_entry) * pos['size']
+                    else:
+                        pnl = (self.last_position_entry - close_price) * pos['size']
+                    
+                    if pnl > 0:
+                        self.winning_trades += 1
+                    else:
+                        self.losing_trades += 1
+                    
+                    self.total_pnl += pnl
+                
+                self._log(f"✅ Position closed - P&L: ${pnl:,.2f}", Fore.GREEN if pnl >= 0 else Fore.RED)
+                
+                # Send Telegram notification for position close
+                if self.telegram.enabled:
+                    self.telegram.notify_position_closed(
+                        direction=pos['position'],
+                        size=pos['size'],
+                        entry_price=self.last_position_entry or pos['entry_price'],
+                        exit_price=close_price,
+                        pnl=pnl
+                    )
+                
                 time.sleep(2)
             else:
                 self._log(f"❌ Failed to close - will retry", Fore.RED)
                 self.pending_signal = signal
+                
+                # Send error notification
+                if self.telegram.enabled:
+                    self.telegram.notify_error(f"Failed to close {pos['position']} position")
                 return
         
         # Open new position
@@ -787,18 +869,42 @@ class AccurateRSISMABot:
         entry_result = self.place_limit_order(entry_side, self.lot_size, entry_price)
         
         if entry_result and entry_result['success']:
+            order = entry_result.get('order', {})
+            order_id = order.get('id', 'N/A')
+            
+            # Store entry price for P&L calculation
+            self.last_position_entry = entry_price
+            self.last_position_size = self.lot_size
+            
             entry_details = {
                 "Action": f"{signal} OPENED",
                 "Price": f"${entry_price:,.2f}",
                 "Size": f"{self.lot_size} contracts",
+                "Order ID": order_id,
                 "RSI": f"{self.current_rsi:.2f}",
                 "SMA": f"{self.current_sma:.2f}",
+                "Spread": f"${orderbook['spread']:.2f}",
                 "Method": "TradingView Exact"
             }
             self._log_detailed("✅ TRADE EXECUTED", entry_details, Fore.GREEN)
             self.trade_count += 1
+            
+            # Send Telegram notification for position open
+            if self.telegram.enabled:
+                self.telegram.notify_position_opened(
+                    direction=signal,
+                    size=self.lot_size,
+                    price=entry_price,
+                    rsi=self.current_rsi,
+                    sma=self.current_sma,
+                    orderbook=orderbook
+                )
         else:
             self._log(f"❌ Failed to open {signal}", Fore.RED)
+            
+            # Send error notification
+            if self.telegram.enabled:
+                self.telegram.notify_error(f"Failed to open {signal} position")
     
     def print_status(self):
         """Print current status"""
@@ -825,6 +931,10 @@ class AccurateRSISMABot:
         # Get RSI internal state
         rsi_state = self.rsi_calculator.get_current_state()
         
+        # Calculate win rate
+        total_closed = self.winning_trades + self.losing_trades
+        win_rate = (self.winning_trades / total_closed * 100) if total_closed > 0 else 0
+        
         status_details = {
             "Connection": f"{connection_status} ({time_since_success:.0f}s ago)",
             "Binance Data": "🟢 ACTIVE" if price else "🔴 FAILED",
@@ -837,9 +947,14 @@ class AccurateRSISMABot:
             "Avg Loss": f"{rsi_state['avg_loss']:.6f}",
             "Position": pos['position'],
             "Size": f"{pos['size']} contracts" if pos['position'] != 'FLAT' else "N/A",
-            "PnL": f"${pos.get('pnl', 0):,.2f}" if pos['position'] != 'FLAT' else "N/A",
+            "Unrealized P&L": f"${pos.get('pnl', 0):,.2f}" if pos['position'] != 'FLAT' else "N/A",
             "Total Trades": self.trade_count,
+            "Closed Trades": total_closed,
+            "Wins/Losses": f"{self.winning_trades}/{self.losing_trades}",
+            "Win Rate": f"{win_rate:.1f}%",
+            "Total P&L": f"${self.total_pnl:,.2f}",
             "Wallet": f"${self.wallet_balance:,.2f}" if self.wallet_balance > 0 else "Not fetched",
+            "Telegram": "🟢 ENABLED" if self.telegram.enabled else "🔴 DISABLED",
             "Method": "TradingView Exact (Wilder's RMA)"
         }
         
@@ -858,6 +973,7 @@ class AccurateRSISMABot:
             "Current SMA": f"{self.current_sma:.2f}",
             "Execution": "Immediate on crossover",
             "Method": "TradingView Exact (Wilder's RMA)",
+            "Telegram": "ENABLED" if self.telegram.enabled else "DISABLED",
             "Status": "ACTIVE"
         }
         self._log_detailed("🚀 BOT STARTED", startup_details, Fore.GREEN)
@@ -889,6 +1005,8 @@ class AccurateRSISMABot:
                         self.execute_trade()
                     except Exception as e:
                         self._log(f"⚠️ Error executing trade: {str(e)[:100]}", Fore.YELLOW)
+                        if self.telegram.enabled:
+                            self.telegram.notify_error(f"Trade execution error: {str(e)[:100]}")
                 
                 # Print status periodically
                 if loop_count % status_interval == 0:
@@ -905,6 +1023,17 @@ class AccurateRSISMABot:
                         if loop_count % 50 == 0:
                             self._log(f"⚠️ Error fetching price: {str(e)[:100]}", Fore.YELLOW)
                 
+                # Send periodic summary every 100 loops (approx 8 minutes)
+                if loop_count % 100 == 0 and self.telegram.enabled:
+                    total_closed = self.winning_trades + self.losing_trades
+                    if total_closed > 0:
+                        self.telegram.notify_trade_summary(
+                            total_trades=self.trade_count,
+                            win_count=self.winning_trades,
+                            loss_count=self.losing_trades,
+                            total_pnl=self.total_pnl
+                        )
+                
                 time.sleep(5)
                 
         except KeyboardInterrupt:
@@ -912,15 +1041,31 @@ class AccurateRSISMABot:
             
             try:
                 pos = self.get_current_position()
+                total_closed = self.winning_trades + self.losing_trades
+                win_rate = (self.winning_trades / total_closed * 100) if total_closed > 0 else 0
                 
                 shutdown_details = {
                     "Total Trades": self.trade_count,
+                    "Closed Trades": total_closed,
+                    "Wins": self.winning_trades,
+                    "Losses": self.losing_trades,
+                    "Win Rate": f"{win_rate:.1f}%",
+                    "Total P&L": f"${self.total_pnl:,.2f}",
                     "Final RSI": f"{self.current_rsi:.2f}",
                     "Final SMA": f"{self.current_sma:.2f}",
                     "Position": pos['position'],
                     "Status": "STOPPED BY USER"
                 }
                 self._log_detailed("🛑 BOT STOPPED", shutdown_details, Fore.YELLOW)
+                
+                # Send shutdown notification
+                if self.telegram.enabled:
+                    self.telegram.notify_bot_shutdown(
+                        total_trades=self.trade_count,
+                        wins=self.winning_trades,
+                        losses=self.losing_trades,
+                        total_pnl=self.total_pnl
+                    )
             except:
                 self._log("🛑 Bot stopped", Fore.YELLOW)
             
@@ -936,6 +1081,10 @@ class AccurateRSISMABot:
             import traceback
             self._log(traceback.format_exc(), Fore.RED)
             self._log("🔄 Bot attempting to recover...", Fore.YELLOW)
+            
+            # Send error notification
+            if self.telegram.enabled:
+                self.telegram.notify_error(f"Critical error: {str(e)[:150]}")
             
             self._reset_sessions()
             time.sleep(10)
