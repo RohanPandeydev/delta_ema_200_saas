@@ -936,6 +936,9 @@ class AccurateRSISMABot:
         win_rate = (self.winning_trades / total_closed * 100) if total_closed > 0 else 0
         
         status_details = {
+            "Order Size": f"{self.lot_size} contracts",
+            "Symbol": self.symbol,
+            "Timeframe": self.timeframe_display,
             "Connection": f"{connection_status} ({time_since_success:.0f}s ago)",
             "Binance Data": "🟢 ACTIVE" if price else "🔴 FAILED",
             "Live Price": f"${price:,.2f}" if price else "N/A",
