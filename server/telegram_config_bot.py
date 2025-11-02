@@ -108,7 +108,7 @@ class ConfigBot:
                 continue
             
             # Match KEY=VALUE or KEY="VALUE"
-            match = re.match(r'^([A-Z_]+)\s*=\s*(.+)$', line)
+            match = re.match(r'^([A-Z_0-9]+)\s*=\s*(.+)$', line)
             if not match:
                 errors.append(f"Invalid format: {line}")
                 continue
@@ -172,7 +172,7 @@ class ConfigBot:
                     if not line or line.startswith('#'):
                         continue
                     
-                    match = re.match(r'^([A-Z_]+)\s*=\s*(.+)$', line)
+                    match = re.match(r'^([A-Z_0-9]+)\s*=\s*(.+)$', line)
                     if match:
                         key, value = match.groups()
                         value = value.strip().strip('"').strip("'")
@@ -333,7 +333,8 @@ class ConfigBot:
             "<code>/update\n"
             "ORDER_SIZE=1\n"
             "RSI_PERIOD=14\n"
-            "SMA_PERIOD=21</code>\n\n"
+            "SMA_PERIOD=21\n"
+            "TIMEFRAME_1M=60</code>\n\n"
             "✨ <i>Changes will be notified to your trading channel!</i>"
         )
         
@@ -381,10 +382,12 @@ class ConfigBot:
                 "ORDER_SIZE=1\n"
                 "SYMBOL=BTCUSD\n"
                 "RSI_PERIOD=14\n"
-                "SMA_PERIOD=21</code>\n\n"
+                "SMA_PERIOD=21\n"
+                "TIMEFRAME_1M=60</code>\n\n"
                 "Or just paste the config values (without /update):\n\n"
                 "<code>ORDER_SIZE=1\n"
-                "SYMBOL=BTCUSD</code>"
+                "SYMBOL=BTCUSD\n"
+                "TIMEFRAME_1M=60</code>"
             )
             await update.message.reply_text(example, parse_mode='HTML')
             return
@@ -457,8 +460,8 @@ class ConfigBot:
                 InlineKeyboardButton("❌ Cancel", callback_data='cancel')
             ],
             [
-                InlineKeyboardButton("💾 Apply Only", callback_data='apply'),
-                InlineKeyboardButton("🔨 Rebuild (Advanced)", callback_data='apply_rebuild')
+                # InlineKeyboardButton("💾 Apply Only", callback_data='apply'),
+                # InlineKeyboardButton("🔨 Rebuild (Advanced)", callback_data='apply_rebuild')
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -670,7 +673,7 @@ class ConfigBot:
         # Button handlers
         application.add_handler(CallbackQueryHandler(
             self.button_callback,
-            pattern='^(apply|apply_restart|apply_rebuild|cancel)$'
+            pattern='^(apply_restart|cancel)$'
         ))
         
         # Message handler for plain text config
