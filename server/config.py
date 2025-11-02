@@ -32,6 +32,7 @@ class Config:
     RSI_PERIOD = int(os.getenv('RSI_PERIOD', '14'))
     RSI_OVERSOLD = int(os.getenv('RSI_OVERSOLD', '30'))
     TIMEFRAME_1M = int(os.getenv('TIMEFRAME_1M', '60'))
+    DRY_RUN  = int(os.getenv('DRY_RUN ', 'FALSE'))
 
     # Telegram
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')

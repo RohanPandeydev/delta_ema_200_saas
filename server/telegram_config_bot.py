@@ -42,6 +42,7 @@ class ConfigBot:
         'TV_SYMBOL': {'type': str, 'pattern': r'^[A-Z:]{5,20}$'},
         'TIMEFRAME_1M': {'type': int, 'min': 1, 'max': 1440},
         'LOT_SIZE': {'type': float, 'min': 0.001, 'max': 100},
+        'DRY_RUN': {'type': str, 'pattern': r'^(True|False|true|false)$'},
     }
     
     def __init__(self):
@@ -334,7 +335,8 @@ class ConfigBot:
             "ORDER_SIZE=1\n"
             "RSI_PERIOD=14\n"
             "SMA_PERIOD=21\n"
-            "TIMEFRAME_1M=60</code>\n\n"
+            "TIMEFRAME_1M=60</code>\n"
+            "DRY_RUN=False</code>\n\n" 
             "✨ <i>Changes will be notified to your trading channel!</i>"
         )
         
@@ -387,7 +389,9 @@ class ConfigBot:
                 "Or just paste the config values (without /update):\n\n"
                 "<code>ORDER_SIZE=1\n"
                 "SYMBOL=BTCUSD\n"
-                "TIMEFRAME_1M=60</code>"
+                "TIMEFRAME_1M=60\n"
+                "DRY_RUN=False</code>\n\n"
+                
             )
             await update.message.reply_text(example, parse_mode='HTML')
             return

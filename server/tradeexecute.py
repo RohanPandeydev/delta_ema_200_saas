@@ -156,6 +156,7 @@ class AccurateRSISMABot:
         self.rsi_period = Config.RSI_PERIOD
         self.sma_period = Config.SMA_PERIOD
         self.timeframe_minutes = Config.TIMEFRAME_1M
+        self.dry_run = Config.DRY_RUN
         
         # Generate resolution string
         if self.timeframe_minutes >= 60:
@@ -877,6 +878,7 @@ class AccurateRSISMABot:
             self.last_position_size = self.lot_size
             
             entry_details = {
+                
                 "Action": f"{signal} OPENED",
                 "Price": f"${entry_price:,.2f}",
                 "Size": f"{self.lot_size} contracts",
@@ -1004,12 +1006,17 @@ class AccurateRSISMABot:
                 
                 # Execute pending trades
                 if self.pending_signal:
-                    try:
-                        self.execute_trade()
-                    except Exception as e:
-                        self._log(f"⚠️ Error executing trade: {str(e)[:100]}", Fore.YELLOW)
-                        if self.telegram.enabled:
-                            self.telegram.notify_error(f"Trade execution error: {str(e)[:100]}")
+                    if self.dry_run:
+                        self._log(f"🧪 Dry Run: Trade signal '{self.pending_signal}' detected but not executed", Fore.CYAN)
+                        self._log(f"   RSI: {self.current_rsi:.2f} | SMA: {self.current_sma:.2f} | Price: ${self.current_price:,.2f}", Fore.YELLOW)
+                        self.pending_signal = None
+                    else:
+                        try:
+                            self.execute_trade()
+                        except Exception as e:
+                            self._log(f"⚠️ Error executing trade: {str(e)[:100]}", Fore.YELLOW)
+                            if self.telegram.enabled:
+                                self.telegram.notify_error(f"Trade execution error: {str(e)[:100]}")
                 
                 # Print status periodically
                 if loop_count % status_interval == 0:
