@@ -1,6 +1,5 @@
 """
 EMA-200 Strategy Trading Bot for Delta Exchange - PRODUCTION VERSION
-Enhanced: Background order monitoring and auto-price updates
 Fixed: Accurate EMA calculation with proper initialization
 Enhanced: Order monitoring and automatic replacement
 New: Flexible timeframe support (minutes, hours, days, weeks, months)
@@ -11,7 +10,6 @@ import time
 import hmac
 import hashlib
 import json
-import threading
 from datetime import datetime
 from collections import deque
 from config import Config
@@ -144,9 +142,6 @@ class EMAStrategyBot:
             timeframe_value, timeframe_type
         )
 
-        # Order monitoring interval
-        self.ORDER_CHECK_INTERVAL = getattr(Config, 'ORDER_CHECK_INTERVAL', 15)
-
         # Initialize Telegram
         self.telegram = TelegramNotifier(
             Config.TELEGRAM_BOT_TOKEN,
@@ -176,12 +171,6 @@ class EMAStrategyBot:
         self.loss_count = 0
         self.total_pnl = 0.0
 
-        # Order monitoring
-        self.monitored_orders = {}  # {order_id: {'side': 'buy/sell', 'size': float, 'created_at': timestamp}}
-        self.order_lock = threading.Lock()
-        self.monitor_thread = None
-        self.stop_monitoring = False
-
         # Logging
         self.log_file = f"logs/ema_bot_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 
@@ -195,7 +184,6 @@ class EMAStrategyBot:
         self._log(f"✅ Bot initialized successfully!", Fore.GREEN)
         self._log(f"📊 Trading {self.symbol} on {self.timeframe_display} timeframe", Fore.GREEN)
         self._log(f"⏱️  Resolution: {self.resolution} ({self.TIMEFRAME_MINUTES} minutes)", Fore.GREEN)
-        self._log(f"🔄 Order check interval: {self.ORDER_CHECK_INTERVAL} seconds", Fore.GREEN)
         
         # Send bot start notification
         self.telegram.notify_bot_start(
@@ -204,9 +192,6 @@ class EMAStrategyBot:
             self.ema_period,
             self.lot_size
         )
-        
-        # Start order monitoring thread
-        self.start_order_monitoring()
         
         print()
 
@@ -590,31 +575,6 @@ class EMAStrategyBot:
             self._log(f"❌ Error cancelling order: {e}", Fore.RED)
             return False
 
-    def edit_order(self, order_id, new_price, size):
-        """Edit order price"""
-        try:
-            path = f"/v2/orders/{order_id}"
-            
-            order_data = {
-                'product_id': self.product_id,
-                'size': size,
-                'limit_price': str(new_price)
-            }
-            
-            body = json.dumps(order_data)
-            headers = self._get_headers("PUT", path, body)
-            url = f"{self.base_url}{path}"
-            
-            response = requests.put(url, headers=headers, data=body, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('success'):
-                    return True
-            return False
-        except Exception as e:
-            return False
-
     def place_limit_order(self, side, size, price):
         """Place limit order"""
         try:
@@ -645,15 +605,6 @@ class EMAStrategyBot:
                     order_id = order.get('id')
                     self._log(f"✅ Order placed! ID: {order_id}", Fore.GREEN)
                     
-                    # Add to monitored orders
-                    with self.order_lock:
-                        self.monitored_orders[order_id] = {
-                            'side': side.lower(),
-                            'size': size,
-                            'price': price,
-                            'created_at': time.time()
-                        }
-                    
                     # Send Telegram notification
                     self.telegram.notify_order_placed(side, size, price, order_id)
                     
@@ -672,115 +623,8 @@ class EMAStrategyBot:
             self.telegram.notify_error(f"Order placement error: {e}")
             return {'success': False, 'error': str(e)}
 
-    def start_order_monitoring(self):
-        """Start background thread for order monitoring"""
-        self.stop_monitoring = False
-        self.monitor_thread = threading.Thread(target=self._order_monitoring_loop, daemon=True)
-        self.monitor_thread.start()
-        self._log(f"🔄 Order monitoring thread started (interval: {self.ORDER_CHECK_INTERVAL}s)", Fore.GREEN)
-
-    def stop_order_monitoring_thread(self):
-        """Stop order monitoring thread"""
-        self.stop_monitoring = True
-        if self.monitor_thread:
-            self.monitor_thread.join(timeout=5)
-            self._log(f"🛑 Order monitoring thread stopped", Fore.YELLOW)
-
-    def _order_monitoring_loop(self):
-        """Background loop to monitor and update orders"""
-        while not self.stop_monitoring:
-            try:
-                time.sleep(self.ORDER_CHECK_INTERVAL)
-                
-                with self.order_lock:
-                    if not self.monitored_orders:
-                        continue
-                    
-                    orders_to_check = list(self.monitored_orders.keys())
-                
-                # Get current orderbook
-                orderbook = self.get_orderbook()
-                if not orderbook:
-                    continue
-                
-                for order_id in orders_to_check:
-                    try:
-                        order = self.get_order_status(order_id)
-                        
-                        if not order:
-                            continue
-                        
-                        state = order.get('state', '').upper()
-                        
-                        # Remove filled, cancelled, or rejected orders
-                        if state in ['FILLED', 'CANCELLED', 'REJECTED']:
-                            with self.order_lock:
-                                if order_id in self.monitored_orders:
-                                    order_info = self.monitored_orders.pop(order_id)
-                                    if state == 'FILLED':
-                                        self._log(f"✅ Order {order_id} filled!", Fore.GREEN)
-                                    else:
-                                        self._log(f"⚠️ Order {order_id} {state.lower()}", Fore.YELLOW)
-                            continue
-                        
-                        # Update price for open orders
-                        if state in ['NEW', 'OPEN', 'PENDING']:
-                            with self.order_lock:
-                                if order_id not in self.monitored_orders:
-                                    continue
-                                
-                                order_info = self.monitored_orders[order_id]
-                                side = order_info['side']
-                                current_price = order_info['price']
-                            
-                            # Get LIVE size from exchange (respects manual edits)
-                            live_size = abs(float(order.get('size', order_info['size'])))
-                            size = live_size if live_size > 0 else order_info['size']
-                            
-                            # Determine new target price based on side
-                            if side == 'buy':
-                                new_price = orderbook['best_bid']
-                            else:  # sell
-                                new_price = orderbook['best_ask']
-                            
-                            # Only update if price has changed significantly (avoid unnecessary updates)
-                            price_diff = abs(new_price - current_price)
-                            min_price_change = current_price * 0.0001  # 0.01% minimum change
-                            
-                            if price_diff > min_price_change:
-                                # Cancel old order
-                                if self.cancel_order(order_id):
-                                    time.sleep(1)
-                                    
-                                    # Place new order at updated price
-                                    result = self.place_limit_order(side, size, new_price)
-                                    
-                                    if result.get('success'):
-                                        self._log(f"🔄 Order updated: {side.upper()} {size} @ ${new_price:,.2f} (was ${current_price:,.2f})", Fore.CYAN)
-                                        
-                                        # Update stored size in case it was manually edited
-                                        new_order_id = result.get('order_id')
-                                        with self.order_lock:
-                                            if new_order_id in self.monitored_orders:
-                                                self.monitored_orders[new_order_id]['size'] = size
-                                    else:
-                                        self._log(f"❌ Failed to replace order {order_id}", Fore.RED)
-                                    
-                                    # Remove old order from monitoring (new one is already added)
-                                    with self.order_lock:
-                                        if order_id in self.monitored_orders:
-                                            self.monitored_orders.pop(order_id)
-                    
-                    except Exception as e:
-                        self._log(f"❌ Error monitoring order {order_id}: {e}", Fore.RED)
-                        continue
-                
-            except Exception as e:
-                self._log(f"❌ Error in monitoring loop: {e}", Fore.RED)
-                time.sleep(5)
-
     def monitor_and_replace_order(self, order_id, side, size, max_wait_seconds=15, check_interval=15):
-        """Monitor an order and replace it if unfilled - now simplified since background monitoring handles it"""
+        """Monitor an order and replace it if unfilled"""
         start_time = time.time()
         
         while True:
@@ -793,24 +637,34 @@ class EMAStrategyBot:
                 
                 if state == 'filled' or unfilled_size == 0:
                     self._log(f"✅ Order {order_id} filled successfully!", Fore.GREEN)
-                    # Remove from monitoring
-                    with self.order_lock:
-                        if order_id in self.monitored_orders:
-                            self.monitored_orders.pop(order_id)
                     return True
                 
                 if state in ['cancelled', 'rejected']:
                     self._log(f"⚠️ Order {order_id} is {state}", Fore.YELLOW)
-                    with self.order_lock:
-                        if order_id in self.monitored_orders:
-                            self.monitored_orders.pop(order_id)
                     return False
                 
-                # Background thread handles price updates, so just wait here
                 if elapsed >= max_wait_seconds:
-                    self._log(f"⏰ Max wait time reached, checking order status...", Fore.YELLOW)
-                    # Give background thread more time since it's handling updates
-                    return False
+                    self._log(f"⏰ Order {order_id} unfilled after {max_wait_seconds}s - replacing...", Fore.YELLOW)
+                    
+                    if self.cancel_order(order_id):
+                        time.sleep(2)
+                        orderbook = self.get_orderbook()
+                        
+                        if not orderbook:
+                            self._log(f"❌ Could not fetch orderbook for replacement", Fore.RED)
+                            return False
+                        
+                        new_price = orderbook['best_ask'] if side.lower() == 'buy' else orderbook['best_bid']
+                        result = self.place_limit_order(side, size, new_price)
+                        
+                        if result.get('success'):
+                            new_order_id = result.get('order_id')
+                            return self.monitor_and_replace_order(new_order_id, side, size, max_wait_seconds, check_interval)
+                        else:
+                            return False
+                    else:
+                        self._log(f"❌ Failed to cancel order for replacement", Fore.RED)
+                        return False
             else:
                 self._log(f"⚠️ Could not fetch order status for {order_id}", Fore.YELLOW)
             
@@ -867,7 +721,7 @@ class EMAStrategyBot:
 
         if result.get('success'):
             order_id = result.get('order_id')
-            filled = self.monitor_and_replace_order(order_id, side, size, max_wait_seconds=60, check_interval=15)
+            filled = self.monitor_and_replace_order(order_id, side, size, max_wait_seconds=15, check_interval=15)
             
             if filled:
                 pnl = current_pos.get('pnl', 0)
@@ -889,7 +743,7 @@ class EMAStrategyBot:
                 
                 return True
             else:
-                self._log(f"⚠️ Close order being managed by background monitor", Fore.YELLOW)
+                self._log(f"⚠️ Failed to fill close order", Fore.YELLOW)
                 return False
 
         return False
@@ -916,7 +770,7 @@ class EMAStrategyBot:
 
         if result.get('success'):
             order_id = result.get('order_id')
-            filled = self.monitor_and_replace_order(order_id, side, self.lot_size, max_wait_seconds=60, check_interval=15)
+            filled = self.monitor_and_replace_order(order_id, side, self.lot_size, max_wait_seconds=15, check_interval=15)
             
             if filled:
                 self.record_trade('OPEN', side, self.lot_size, price, direction)
@@ -934,7 +788,7 @@ class EMAStrategyBot:
                 
                 return True
             else:
-                self._log(f"⚠️ Order being managed by background monitor", Fore.YELLOW)
+                self._log(f"⚠️ Failed to fill open order", Fore.YELLOW)
                 return False
 
         return False
@@ -975,11 +829,6 @@ class EMAStrategyBot:
 
         print(f"{Fore.WHITE}🔢 Total Trades:   {self.trade_count}")
         print(f"{Fore.WHITE}⏱️  Timeframe:      {self.timeframe_display}")
-        
-        # Show monitored orders count
-        with self.order_lock:
-            monitored_count = len(self.monitored_orders)
-        print(f"{Fore.CYAN}🔄 Monitored Orders: {monitored_count}")
 
         print(f"{Fore.CYAN}{'='*80}\n")
 
@@ -1107,9 +956,6 @@ class EMAStrategyBot:
                 self._log(f"\n🛑 Bot stopped by user", Fore.YELLOW)
                 self._log(f"📊 Total trades: {self.trade_count}", Fore.CYAN)
                 self.display_recent_trades(10)
-                
-                # Stop monitoring thread
-                self.stop_order_monitoring_thread()
                 
                 # Send shutdown notification
                 self.telegram.notify_bot_shutdown(

@@ -26,9 +26,10 @@ class Config:
     LOT_SIZE = float(os.getenv('LOT_SIZE', '1'))
    
     TIMEFRAME = int(os.getenv('TIMEFRAME', '1'))
+    ORDER_CHECK_INTERVAL = int(os.getenv('ORDER_CHECK_INTERVAL', '15'))
     TIMEFRAME_TYPE = os.getenv('TIMEFRAME_TYPE', 'm')
     
-    EMA = int(os.getenv('EMA', 'EMA'))
+    EMA = int(os.getenv('EMA', '200'))
 
     # Telegram
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
